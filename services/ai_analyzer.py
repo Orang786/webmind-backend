@@ -11,53 +11,9 @@ client = AsyncOpenAI(
     api_key=os.getenv("OPENROUTER_API_KEY"),
 )
 
-def safe_parse_json(text: str) -> dict:
-    """Надёжный парсинг JSON даже если Gemini вернул кривой текст"""
+def build_messages(query: str, history: list, sites_data: list = None) -> tuple:
+    """Собираем сообщения для AI"""
     
-    # Убираем markdown блоки если есть
-    text = text.strip()
-    if text.startswith("```json"):
-        text = text[7:]
-    if text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    text = text.strip()
-
-    # Попытка 1: прямой парсинг
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-
-    # Попытка 2: чистим плохие escape-символы
-    try:
-        # Заменяем невалидные escape последовательности
-        cleaned = re.sub(r'\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})', r'\\\\', text)
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        pass
-
-    # Попытка 3: ищем JSON внутри текста через регулярку
-    try:
-        match = re.search(r'\{.*\}', text, re.DOTALL)
-        if match:
-            return json.loads(match.group())
-    except json.JSONDecodeError:
-        pass
-
-    # Попытка 4: если всё сломалось - возвращаем текст как answer
-    return {"answer": text}
-
-
-async def decide_and_analyze(query: str, history: list, sites_data: list = None) -> dict:
-    messages = []
-    for msg in history:
-        messages.append({
-            "role": msg["role"],
-            "content": msg["content"]
-        })
-
     context_str = ""
     if sites_data:
         context_str = "\n\n📌 Данные из интернета:\n"
@@ -77,44 +33,73 @@ async def decide_and_analyze(query: str, history: list, sites_data: list = None)
    - - списки для перечислений
    - | таблицы | для сравнений |
 3. Если есть данные из интернета — анализируй их.
-4. Отвечай развёрнуто и структурированно.
+4. Отвечай развёрнуто и структурированно."""
 
-ВАЖНО: Отвечай строго в JSON формате:
-{"answer": "текст ответа в markdown"}
-
-Никаких дополнительных полей. Только поле answer."""
+    messages = []
+    for msg in history:
+        messages.append({
+            "role": msg["role"],
+            "content": msg["content"]
+        })
 
     user_content = f"{context_str}\n\nВопрос: {query}" if context_str else query
     messages.append({"role": "user", "content": user_content})
 
+    return system_prompt, messages
+
+
+async def stream_analyze(query: str, history: list, sites_data: list = None):
+    """Стриминг ответа — генерирует чанки текста"""
+    
+    system_prompt, messages = build_messages(query, history, sites_data)
+
     try:
-        response = await client.chat.completions.create(
-            model="google/gemini-2.0-flash-001",
+        stream = await client.chat.completions.create(
+            model="meta-llama/llama-3.1-8b-instruct:free",
             messages=[
                 {"role": "system", "content": system_prompt},
                 *messages
             ],
-            response_format={"type": "json_object"}
+            stream=True  # Включаем стриминг!
         )
 
-        raw = response.choices[0].message.content
-        print(f"📥 Ответ AI (первые 200 символов): {raw[:200]}")
+        async for chunk in stream:
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                yield delta.content
 
-        # Используем надёжный парсинг
-        data = safe_parse_json(raw)
+    except Exception as e:
+        yield f"\n\n❌ Ошибка: {str(e)}"
+
+
+async def decide_and_analyze(query: str, history: list, sites_data: list = None) -> dict:
+    """Обычный запрос без стриминга"""
+    
+    system_prompt, messages = build_messages(query, history, sites_data)
+
+    try:
+        response = await client.chat.completions.create(
+            model="google/gemini-2.0-flash",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                *messages
+            ],
+        )
+
+        answer = response.choices[0].message.content or ""
 
         tokens_used = 0
         if hasattr(response, "usage") and response.usage:
             tokens_used = response.usage.total_tokens or 0
 
         return {
-            "answer": data.get("answer", raw),
+            "answer": answer,
             "tokens_used": tokens_used
         }
 
     except Exception as e:
         print(f"❌ Ошибка AI: {e}")
         return {
-            "answer": "Произошла ошибка при обработке запроса. Попробуй ещё раз.",
+            "answer": f"Произошла ошибка: {str(e)}",
             "tokens_used": 0
         }
