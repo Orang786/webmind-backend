@@ -55,7 +55,7 @@ async def stream_analyze(query: str, history: list, sites_data: list = None):
 
     try:
         stream = await client.chat.completions.create(
-            model="google/gemma-3-27b-it:free",
+            model="google/gemini-2.0-flash-001",
             messages=[
                 {"role": "system", "content": system_prompt},
                 *messages
@@ -79,7 +79,7 @@ async def decide_and_analyze(query: str, history: list, sites_data: list = None)
 
     try:
         response = await client.chat.completions.create(
-            model="google/gemma-3-27b-it:free",
+            model="google/gemini-2.0-flash-001",
             messages=[
                 {"role": "system", "content": system_prompt},
                 *messages
