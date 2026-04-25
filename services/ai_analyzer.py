@@ -79,7 +79,7 @@ async def decide_and_analyze(query: str, history: list, sites_data: list = None)
 
     try:
         response = await client.chat.completions.create(
-            model="google/gemini-2.0-flash",
+            model="google/gemma-3-27b-it:free",
             messages=[
                 {"role": "system", "content": system_prompt},
                 *messages
