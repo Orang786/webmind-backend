@@ -55,7 +55,7 @@ async def stream_analyze(query: str, history: list, sites_data: list = None):
 
     try:
         stream = await client.chat.completions.create(
-            model="meta-llama/llama-3.1-8b-instruct:free",
+            model="google/gemma-3-27b-it:free",
             messages=[
                 {"role": "system", "content": system_prompt},
                 *messages
