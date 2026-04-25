@@ -5,6 +5,8 @@ from services.scraper import scrape_sites
 from services.ai_analyzer import decide_and_analyze
 from models.schemas import SearchRequest, SearchResponse
 
+import os
+
 app = FastAPI(title="WebMind AI")
 
 app.add_middleware(
@@ -14,6 +16,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/test-env")
+async def test_env():
+    key = os.getenv("OPENROUTER_API_KEY", "НЕ НАЙДЕН")
+    return {
+        "key_found": key != "НЕ НАЙДЕН",
+        "key_preview": key[:15] + "..." if len(key) > 15 else key
+    }
 
 @app.get("/health")
 async def health():
