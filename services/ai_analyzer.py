@@ -1,6 +1,4 @@
 import os
-import json
-import re
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 
@@ -11,9 +9,15 @@ client = AsyncOpenAI(
     api_key=os.getenv("OPENROUTER_API_KEY"),
 )
 
+# Модели по приоритету
+MODELS = [
+    "google/gemini-2.0-flash-001",
+    "google/gemini-flash-1.5",
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "mistralai/mistral-7b-instruct:free",
+]
+
 def build_messages(query: str, history: list, sites_data: list = None) -> tuple:
-    """Собираем сообщения для AI"""
-    
     context_str = ""
     if sites_data:
         context_str = "\n\n📌 Данные из интернета:\n"
@@ -48,58 +52,57 @@ def build_messages(query: str, history: list, sites_data: list = None) -> tuple:
     return system_prompt, messages
 
 
+async def try_models(messages: list, stream: bool = False):
+    """Пробуем модели по очереди"""
+    last_error = None
+    for model in MODELS:
+        try:
+            print(f"🤖 Пробуем: {model}")
+            response = await client.chat.completions.create(
+                model=model,
+                messages=messages,
+                stream=stream
+            )
+            print(f"✅ Работает: {model}")
+            return response
+        except Exception as e:
+            print(f"❌ {model}: {e}")
+            last_error = e
+            continue
+    raise Exception(f"Все модели недоступны: {last_error}")
+
+
 async def stream_analyze(query: str, history: list, sites_data: list = None):
-    """Стриминг ответа — генерирует чанки текста"""
-    
     system_prompt, messages = build_messages(query, history, sites_data)
-
+    all_messages = [
+        {"role": "system", "content": system_prompt},
+        *messages
+    ]
     try:
-        stream = await client.chat.completions.create(
-            model="google/gemini-2.0-flash-001",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                *messages
-            ],
-            stream=True  # Включаем стриминг!
-        )
-
+        stream = await try_models(all_messages, stream=True)
         async for chunk in stream:
             delta = chunk.choices[0].delta
             if delta and delta.content:
                 yield delta.content
-
     except Exception as e:
         yield f"\n\n❌ Ошибка: {str(e)}"
 
 
 async def decide_and_analyze(query: str, history: list, sites_data: list = None) -> dict:
-    """Обычный запрос без стриминга"""
-    
     system_prompt, messages = build_messages(query, history, sites_data)
-
+    all_messages = [
+        {"role": "system", "content": system_prompt},
+        *messages
+    ]
     try:
-        response = await client.chat.completions.create(
-            model="google/gemini-2.0-flash-001",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                *messages
-            ],
-        )
-
+        response = await try_models(all_messages, stream=False)
         answer = response.choices[0].message.content or ""
-
         tokens_used = 0
         if hasattr(response, "usage") and response.usage:
             tokens_used = response.usage.total_tokens or 0
-
-        return {
-            "answer": answer,
-            "tokens_used": tokens_used
-        }
-
+        return {"answer": answer, "tokens_used": tokens_used}
     except Exception as e:
-        print(f"❌ Ошибка AI: {e}")
         return {
-            "answer": f"Произошла ошибка: {str(e)}",
+            "answer": "Все AI модели сейчас перегружены. Попробуйте через минуту.",
             "tokens_used": 0
         }
