@@ -11,11 +11,11 @@ client = AsyncOpenAI(
 
 # Модели по приоритету
 MODELS = [
-    "google/gemini-2.0-flash-001",      # Основная
-    "google/gemini-flash-1.5",           # Запасная от Google
-    "openai/gpt-4o-mini",               # Запасная OpenAI
-    "meta-llama/llama-3.1-8b-instruct:free",  # Бесплатная
-    "mistralai/mistral-7b-instruct:free",      # Бесплатная
+    "google/gemini-3.1-flash-lite-preview",
+    "google/gemma-4-26b-a4b-it:free",
+    "google/gemini-3.1-flash-image-preview",
+    "google/gemini-3.1-pro-preview-customtools",
+    "google/gemma-3-4b-it:free",
 ]
 
 def build_messages(query: str, history: list, sites_data: list = None) -> tuple:
