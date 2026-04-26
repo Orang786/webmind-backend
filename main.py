@@ -132,3 +132,23 @@ async def analyze(request: SearchRequest):
     except Exception as e:
         print(f"Ошибка: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/models")
+async def list_models():
+    """Показывает доступные модели на OpenRouter"""
+    import httpx
+    import os
+    
+    async with httpx.AsyncClient() as client:
+        res = await client.get(
+            "https://openrouter.ai/api/v1/models",
+            headers={"Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}"}
+        )
+    
+    models = res.json()
+    # Фильтруем только бесплатные и Google модели
+    filtered = [
+        m["id"] for m in models.get("data", [])
+        if "gemini" in m["id"].lower() or ":free" in m["id"]
+    ]
+    return {"available_models": filtered}

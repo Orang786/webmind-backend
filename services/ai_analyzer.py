@@ -11,10 +11,11 @@ client = AsyncOpenAI(
 
 # Модели по приоритету
 MODELS = [
-    "google/gemini-2.0-flash-001",
-    "google/gemini-flash-1.5",
-    "meta-llama/llama-3.1-8b-instruct:free",
-    "azure/claude-sonnet-4.6",
+    "google/gemini-2.0-flash-001",      # Основная
+    "google/gemini-flash-1.5",           # Запасная от Google
+    "openai/gpt-4o-mini",               # Запасная OpenAI
+    "meta-llama/llama-3.1-8b-instruct:free",  # Бесплатная
+    "mistralai/mistral-7b-instruct:free",      # Бесплатная
 ]
 
 def build_messages(query: str, history: list, sites_data: list = None) -> tuple:
@@ -55,6 +56,7 @@ def build_messages(query: str, history: list, sites_data: list = None) -> tuple:
 async def try_models(messages: list, stream: bool = False):
     """Пробуем модели по очереди"""
     last_error = None
+    
     for model in MODELS:
         try:
             print(f"🤖 Пробуем: {model}")
@@ -65,10 +67,20 @@ async def try_models(messages: list, stream: bool = False):
             )
             print(f"✅ Работает: {model}")
             return response
+            
         except Exception as e:
-            print(f"❌ {model}: {e}")
+            error_str = str(e)
+            print(f"❌ {model}: {error_str}")
+            
+            # Если ошибка 400 (неверная модель) или 404 — пробуем следующую
+            # Если ошибка 429 (лимит) — тоже пробуем следующую
+            # Если ошибка 401 (ключ) — нет смысла пробовать дальше
+            if "401" in error_str:
+                raise Exception("Неверный API ключ OpenRouter")
+                
             last_error = e
             continue
+            
     raise Exception(f"Все модели недоступны: {last_error}")
 
 
