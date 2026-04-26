@@ -14,7 +14,7 @@ MODELS = [
     "google/gemini-2.0-flash-001",
     "google/gemini-flash-1.5",
     "meta-llama/llama-3.1-8b-instruct:free",
-    "google/gemma-4-31B:free",
+    "azure/claude-sonnet-4.6",
 ]
 
 def build_messages(query: str, history: list, sites_data: list = None) -> tuple:
